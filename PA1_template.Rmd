@@ -5,21 +5,135 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
+First we will unzip the file, download it and save it to the `data` variable. In order to make plotting easier, we'll convert the dates to a date format. Also we'll add the weekdays to the dataframe to make future plots easier to construct. Then we apply the `summary` function to it to get a quick overview of the data it contains. We will also download the ggplot2 package to plot the last graph. 
 
-
+```{r, echo=TRUE,warning=FALSE}
+library(ggplot2)
+unzip("activity.zip")
+data <- read.csv("activity.csv")
+data$date <- as.Date(data$date, "%Y-%m-%d")
+weekday <- weekdays(data$date)
+data <- cbind(data,weekday)
+summary(data)
+```
 
 ## What is mean total number of steps taken per day?
+First we subset the data by date and steps, excluding the NA values, and sum them. Here's the histogram showing the data. 
 
+```{r, echo=TRUE, warning=FALSE}
+data_totalsteps <-  with(data, aggregate(steps, by = list(date), FUN = sum, na.rm = TRUE))
+names(data_totalsteps) <- c("date", "steps")
+hist(data_totalsteps$steps, main = "Total number of steps taken per day", xlab = "Total steps taken per day", col = "lightgreen", ylim = c(0,20), breaks = seq(0,25000, by=2500))
+```
+```{r, echo=FALSE, results='hide'}
+png("plot1.png", width = 480, height = 480)
+hist(data_totalsteps$steps, main = "Total number of steps taken per day", xlab = "Total steps taken per day", col = "lightgreen", ylim = c(0,20), breaks = seq(0,25000, by=2500))
+dev.off()
+```
 
+We calculate the mean of the total number of steps taken per day as follows.
+
+```{r, echo=TRUE, warning=FALSE}
+mean(data_totalsteps$steps)
+```
+Then we obtain the median of the toal number of steps taken per day like this.
+
+```{r, echo=TRUE, warning=FALSE}
+median(data_totalsteps$steps)
+```
 
 ## What is the average daily activity pattern?
+We create the time series plot by first subsetting the data per interval and then calculating the mean. We make a time series plot (i.e. type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).
 
+```{r, echo=TRUE, warning=FALSE}
+data_dailyactivity <- aggregate(data$steps, by=list(data$interval), FUN=mean, na.rm=TRUE)
+names(data_dailyactivity) <- c("interval", "mean")
+plot(data_dailyactivity$interval, data_dailyactivity$mean, type = "l", lwd=2, xlab = "Interval", ylab = "Average number of steps per intervals", main = "Average number of steps per intervals")
+```
 
+```{r, echo=FALSE, results='hide'}
+png("plot2.png", width = 480, height = 480)
+plot(data_dailyactivity$interval, data_dailyactivity$mean, type = "l", lwd=2, xlab = "Interval", ylab = "Average number of steps per intervals", main = "Average number of steps per intervals")
+dev.off()
+```
+
+Which 5-minute interval, on aversge across all the days in the dataset, contains the maximum number of steps? 
+```{r, echo=TRUE, warning=FALSE}
+data_dailyactivity[which.max(data_dailyactivity$mean), ]$interval
+```
 
 ## Imputing missing values
+This is the total number of missing values in the dataset. 
 
+```{r, echo=TRUE, warning=FALSE}
+colSums(is.na(data))
+```
+We will fill in the missing values in *steps* with the mean of the intervals subset we created earlier. First we match both datasets by the number of interval.
 
+```{r, echo=TRUE, warning=FALSE}
+imputing_steps <- data_dailyactivity$mean[match(data$interval, data_dailyactivity$interval)] 
+```
+
+Then we create a new dataset with the missing data filled in. 
+
+```{r, echo=TRUE, warning=FALSE}
+data_imputedsteps <- transform(data, steps=ifelse(is.na(data$steps), yes=imputing_steps, no=data$steps))
+data_totalsteps_imputed <- aggregate(steps ~ date, data_imputedsteps, sum)
+names(data_totalsteps_imputed) <- c("date", "dailysteps")
+```
+
+Now we can plot a new histogram. 
+
+```{r, echo=TRUE, warning=FALSE}
+hist(data_totalsteps_imputed$dailysteps, col = "lightgreen", xlab = "Total steps per day", main = "Total number of steps taken each day", breaks = seq(0,25000, by=2500), ylim = c(0,30))
+```
+
+```{r, echo=FALSE, results='hide'}
+png("plot3.png", width = 480, height = 480)
+hist(data_totalsteps_imputed$dailysteps, col = "lightgreen", xlab = "Total steps per day", main = "Total number of steps taken each day", breaks = seq(0,25000, by=2500), ylim = c(0,30))
+dev.off()
+```
+
+We calculate the mean of the total number of steps taken each day as follows.
+
+```{r, echo=TRUE, warning=FALSE}
+mean(data_totalsteps_imputed$dailysteps)
+```
+Then we obtain the median of the toal number of steps taken each day like this.
+
+```{r, echo=TRUE, warning=FALSE}
+median(data_totalsteps_imputed$dailysteps)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r, echo=TRUE, warning=FALSE}
+data$datetype <- sapply(data$date, function(x) {
+        if(weekdays(x) == "sábado" | weekdays(x) == "domingo")
+        {y <- "Weekend"} else
+        {y <- "Weekday"}
+        y
+})
+```
+
+Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). 
+
+```{r, echo=TRUE, warning=FALSE}
+data_activitybydate <- aggregate(steps ~ interval+datetype, data, mean, na.rm=TRUE)
+graph <- ggplot(data_activitybydate, aes(interval, steps, color=datetype)) + geom_line(show.legend = FALSE) + labs(title = "Average daily steps by type of date", x="Interval", y="Average number of steps") + facet_wrap(~datetype, ncol = 1, nrow = 2) 
+print(graph)
+```
+
+```{r, echo=FALSE, results='hide'}
+png("plot4.png", width = 680, height = 680)
+graph <- ggplot(data_activitybydate, aes(interval, steps, color=datetype)) + geom_line(show.legend = FALSE) + labs(title = "Average daily steps by type of date", x="Interval", y="Average number of steps") + facet_wrap(~datetype, ncol = 1, nrow = 2) 
+print(graph)
+dev.off()
+```
+
+
+
+
